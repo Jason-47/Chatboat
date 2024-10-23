@@ -1,28 +1,126 @@
+<!DOCTYPE html>
 <html>
- <head>
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
- </head>
- <body>
-  <h3>JS with REST API</h3>
-  <button id="connect">Connect Salesforce</button>
-  <script type="text/javascript">
-    $(document).ready(function(){
-     $('#connect').click(function(){
-     //The clientId and consumerSecret are the ones from the Connected App
-     var clientId = "3MVG9d8..z.hDcPKIsCpCQuxIpjVW7s3n1tOeB8w4D0NkJjb2XPLcvQ8Y6J2ODhuyjOCrFZBVZsZOvPIP55Jj";
-     var consumerSecret = "0D9A64A1C98D8558301B4469F29F38E32C173D909F8636BD0E0D8193CFEBBEC3";
-     //Authorization endpoint
-     var authEndPoint = "https://maneendranath-dev-ed.my.salesforce.com/services/oauth2/authorize";
-     //response_type must be set to token
-     var responseType = "token";
-     //This is the callback URL from the connected app
-     var redirectURI = "https://jason-47.github.io/My-AI-BOT/";
-     //Construct the URL with the required parameters
-     var requestURL = authEndPoint+'?client_id='+clientId+'&response_type='+responseType+'&redirect_uri='+redirectURI;
-     //redirect the user to the endpoint 
-     window.location = requestURL;
-     });
-  })
- </script>
- </body>
+<head>
+    <title>Fetch Custom Settings and Show Buttons</title>
+    <script>
+        // Your Salesforce org's details
+        const CLIENT_ID = '3MVG9SHFu79R42RR04Yt5fB5mocrKgSrjsFwsIlrVzFh9co4ulBSufJOqGZAPNnZs67z28GRqcDuHNHavdZUJ';
+        const CLIENT_SECRET = 'C96A75326B8959F050424B364AE27BEF5AAC11EAC238B11D1613F069A8FDD05F';
+        const REDIRECT_URI = 'https://tricore--dev.sandbox.my.salesforce.com/callback'; 
+        const AUTH_URL = 'https://tricore--dev.sandbox.my.salesforce.com/services/oauth2/authorize'; 
+        const TOKEN_URL = 'https://tricore--dev.sandbox.my.salesforce.com/services/oauth2/token'; 
+        const API_URL = '/services/apexrest/settings'; 
+
+        // Function to initiate the OAuth login process
+        function loginWithSalesforce() {
+            const authWindow = window.open(
+                `${AUTH_URL}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
+                'authWindow',
+                'width=800,height=600'
+            );
+            
+            // Listener for the authorization code
+            window.addEventListener('message', async function(event) {
+                if (event.origin === window.location.origin) {
+                    const authorizationCode = event.data;
+                    if (authorizationCode) {
+                        // Exchange the authorization code for an access token
+                        const accessToken = await getAccessToken(authorizationCode);
+                        if (accessToken) {
+                            // Use the access token to call the Salesforce API
+                            getCustomSetting(accessToken);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to exchange authorization code for an access token
+        async function getAccessToken(code) {
+            try {
+                const response = await fetch(TOKEN_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: `grant_type=authorization_code&code=${code}&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.access_token;
+                } else {
+                    alert('Failed to get access token');
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error getting access token:', error);
+                return null;
+            }
+        }
+
+        // Function to call Salesforce API and fetch the custom setting value
+        async function getCustomSetting(accessToken) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const settingValue = await response.text();
+                    showButtons(settingValue);
+                } else {
+                    alert('Failed to fetch setting: ' + response.status);
+                }
+            } catch (error) {
+                console.error('Error fetching custom setting:', error);
+            }
+        }
+
+        // Function to show buttons based on the custom setting value
+        function showButtons(settingValue) {
+            // Assume the custom setting returns "true" or "false"
+            const settingIsTrue = settingValue.trim().toLowerCase() === 'true';
+            
+            if (settingIsTrue) {
+                document.getElementById('legacyChatButton').style.display = 'block';
+                document.getElementById('miawButton').style.display = 'none';
+            } else {
+                document.getElementById('legacyChatButton').style.display = 'none';
+                document.getElementById('miawButton').style.display = 'block';
+            }
+        }
+
+        // Callback function to extract authorization code from URL
+        function handleCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const authorizationCode = urlParams.get('code');
+            if (authorizationCode) {
+                window.opener.postMessage(authorizationCode, window.location.origin);
+                window.close();
+            }
+        }
+
+        // Check if we are on the callback URL
+        if (window.location.pathname === '/callback') {
+            handleCallback();
+        }
+    </script>
+    <style>
+        #legacyChatButton, #miawButton {
+            display: none; /* Initially hide the buttons */
+        }
+    </style>
+</head>
+<body>
+    <h2>Custom Setting Value</h2>
+    <button onclick="loginWithSalesforce()">Login with Salesforce</button>
+    
+    <!-- Conditionally displayed buttons -->
+    <button id="legacyChatButton">Legacy Chat</button>
+    <button id="miawButton">MIAW</button>
+</body>
 </html>
